@@ -15,6 +15,8 @@ create table if not exists public.papers (
   gap         text,
   pillar      text,
   link        text,
+  file_url    text,
+  file_name   text,
   created_at  timestamptz not null default now()
 );
 
@@ -50,3 +52,16 @@ values (
   'Risk-based thinking',
   'Reframes risk from compliance toward strategic value; links strategy–performance–risk — supports the integrated structure.'
 );
+
+-- File attachments -------------------------------------------------
+-- Storage bucket to hold uploaded paper PDFs, plus shared-team policies.
+insert into storage.buckets (id, name, public)
+values ('paper-files', 'paper-files', true)
+on conflict (id) do nothing;
+
+create policy "team can upload files"
+  on storage.objects for insert with check (bucket_id = 'paper-files');
+create policy "anyone can read files"
+  on storage.objects for select using (bucket_id = 'paper-files');
+create policy "team can delete files"
+  on storage.objects for delete using (bucket_id = 'paper-files');

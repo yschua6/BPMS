@@ -118,6 +118,10 @@
         <label>Link to my framework</label>
         <input id="f-link" placeholder="How this feeds the BPMS argument.">
       </div>
+      <div class="full">
+        <label>Attach file — the paper's PDF (optional)</label>
+        <input type="file" id="f-file" accept=".pdf,.doc,.docx,.txt">
+      </div>
     </div>
     <div class="row-actions">
       <button class="primary" id="add-btn" onclick="addRow()">Add to matrix</button>
@@ -139,7 +143,7 @@
         <tr>
           <th>Source</th><th>Core argument</th><th>Method</th>
           <th>Key findings</th><th>Gap the authors admit</th><th>Pillar</th>
-          <th>Link to my framework</th><th></th>
+          <th>Link to my framework</th><th>File</th><th></th>
         </tr>
       </thead>
       <tbody id="rows"></tbody>
@@ -179,6 +183,9 @@
         '<td>'+esc(r.gap)+'</td>'+
         '<td><span class="pill">'+esc(r.pillar)+'</span></td>'+
         '<td>'+esc(r.link)+'</td>'+
+        '<td>'+(r.file_url
+          ? '<a href="'+esc(r.file_url)+'" target="_blank" rel="noopener">📎 '+esc(r.file_name||'open')+'</a>'
+          : '<span style="color:var(--muted)">—</span>')+'</td>'+
         '<td><button class="del" onclick="removeRow(\''+r.id+'\')">remove</button></td>';
       tb.appendChild(tr);
     });
@@ -202,10 +209,31 @@
     if(!sb){ alert('Not connected to the database yet — see config.js.'); return; }
     const btn = document.getElementById('add-btn');
     btn.disabled = true; btn.textContent = 'Saving…';
+
+    // Upload an attached file to Supabase Storage first, if any.
+    let file_url = null, file_name = null;
+    const fileInput = document.getElementById('f-file');
+    if(fileInput.files && fileInput.files[0]){
+      btn.textContent = 'Uploading file…';
+      const f = fileInput.files[0];
+      const safe = f.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+      const path = Date.now() + '-' + Math.random().toString(36).slice(2,8) + '-' + safe;
+      const up = await sb.storage.from('paper-files').upload(path, f, { upsert:false });
+      if(up.error){
+        alert('File upload failed: ' + up.error.message +
+              '\n\nMake sure the "paper-files" storage bucket exists (see README).');
+        btn.disabled = false; btn.textContent = 'Add to matrix'; return;
+      }
+      file_url = sb.storage.from('paper-files').getPublicUrl(path).data.publicUrl;
+      file_name = f.name;
+    }
+
+    btn.textContent = 'Saving…';
     const row = {
       source, method:val('f-method'), argument:val('f-argument'),
       findings:val('f-findings'), gap:val('f-gap'),
-      pillar:val('f-pillar'), link:val('f-link')
+      pillar:val('f-pillar'), link:val('f-link'),
+      file_url, file_name
     };
     const { error } = await sb.from('papers').insert(row);
     btn.disabled = false; btn.textContent = 'Add to matrix';
@@ -224,11 +252,12 @@
   function clearForm(){
     ['f-source','f-method','f-argument','f-findings','f-gap','f-link']
       .forEach(id=>document.getElementById(id).value='');
+    document.getElementById('f-file').value = '';
   }
 
   function exportCSV(){
-    const head = ['Source','Core argument','Method','Key findings','Gap the authors admit','Pillar','Link to my framework'];
-    const rows = data.map(r=>[r.source,r.argument,r.method,r.findings,r.gap,r.pillar,r.link]);
+    const head = ['Source','Core argument','Method','Key findings','Gap the authors admit','Pillar','Link to my framework','File'];
+    const rows = data.map(r=>[r.source,r.argument,r.method,r.findings,r.gap,r.pillar,r.link,r.file_url]);
     const csv = [head,...rows].map(row=>
       row.map(c=>'"'+(c||'').replace(/"/g,'""')+'"').join(',')).join('\r\n');
     const blob = new Blob([csv],{type:'text/csv'});
