@@ -1,0 +1,11 @@
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
+
+# Local env (this app keeps its keys in config.js, which IS committed
+# on purpose — the anon key is public-safe. Add any private files below.)
+.env
+.env.*
